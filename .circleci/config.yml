@@ -47,6 +47,10 @@ jobs:
     steps:
       - checkout:
           path: ~/project
+      - run:
+          name: Set Build tool as env variable
+          description: Sets build tool of gradle v/s maven
+          command: echo "export BUILD_TOOL=gradle" >> $BASH_ENV
       - lumos/ci_env_setup
       - lumos/setup_java
       - lumos/spotless
@@ -64,7 +68,7 @@ jobs:
 
 workflows:
   build-project:
-    when:       
+    when:
       and:
         - not: << pipeline.parameters.release_build_trigger >>
         - not: << pipeline.parameters.release_branch_cut >>
