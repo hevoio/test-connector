@@ -4,3 +4,5 @@ plugins {
 }
 
 rootProject.name = "test-connector"
+include("test-cdata-connector")
+include("test-noncdata-connector")
