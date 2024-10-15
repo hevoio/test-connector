@@ -108,7 +108,6 @@ sonar {
     properties {
         property("sonar.host.url", System.getenv("SONARQUBE_SERVER_URL"))
         property("sonar.coverage.jacoco.xmlReportPaths", "$projectDir/code-coverage-report/build/reports/jacoco/testCodeCoverageReport/testCodeCoverageReport.xml")
-        property("sonar.exclusions", "**/io/hevo/fortress/command/*.java," + "**/io/hevo/fortress/module/*.java," + "**/io/hevo/connector/hubspot/*.java")
     }
 }
 
