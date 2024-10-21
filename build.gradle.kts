@@ -73,7 +73,7 @@ dependencies {
         exclude(group = "com.slf4j", module = "slf4j-jdk14")
     }
 
-    implementation(files("$projectDir/libs/cdata.jdbc.salesforce.jar"))
+//    implementation(files("$projectDir/libs/*.jar"))
     implementation("io.hevo:hevo-sdk:1.0.0-SNAPSHOT")
     implementation("io.hevo:jdbc-connector:1.0.0-SNAPSHOT")
 
@@ -161,11 +161,11 @@ tasks.shadowJar {
     // Exclude default configurations
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 
-    // Explicitly include JAR & cdata.lic files from the libs folder
-    from("libs/") {
-        include("cdata.jdbc.salesforce.jar")
-        include("*.lic")
-    }
+    // Explicitly include JAR & *.lic files from the libs folder
+//    from("libs/") {
+//        include("*.jar")
+//        include("*.lic")
+//    }
 
     // Specify the main class for the JAR
     manifest {
