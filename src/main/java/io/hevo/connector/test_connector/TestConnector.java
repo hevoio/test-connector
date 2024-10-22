@@ -1,29 +1,51 @@
 package io.hevo.connector.test_connector;
 
+import io.hevo.connector.GenericConnector;
 import io.hevo.connector.exceptions.ConnectorException;
-import io.hevo.connector.exceptions.RateLimitException;
-import io.hevo.connector.jdbc.DbConnectionSource;
-import io.hevo.connector.jdbc.JdbcConnector;
-import io.hevo.connector.model.AccountType;
-import io.hevo.connector.model.AuthCredentials;
-import io.hevo.connector.model.AuthType;
+import io.hevo.connector.model.ConnectorContext;
+import io.hevo.connector.model.ConnectorMeta;
+import io.hevo.connector.model.ExecutionResult;
 import io.hevo.connector.model.ObjectDetails;
 import io.hevo.connector.model.ObjectSchema;
+import io.hevo.connector.model.enums.OpType;
 import io.hevo.connector.model.enums.SourceObjectStatus;
+import io.hevo.connector.model.field.data.datum.hudt.HBoolean;
+import io.hevo.connector.model.field.data.datum.hudt.HByte;
+import io.hevo.connector.model.field.data.datum.hudt.HDate;
+import io.hevo.connector.model.field.data.datum.hudt.HDateTime;
+import io.hevo.connector.model.field.data.datum.hudt.HDateTimeTZ;
 import io.hevo.connector.model.field.data.datum.hudt.HDatum;
+import io.hevo.connector.model.field.data.datum.hudt.HDecimal;
+import io.hevo.connector.model.field.data.datum.hudt.HDouble;
+import io.hevo.connector.model.field.data.datum.hudt.HFloat;
+import io.hevo.connector.model.field.data.datum.hudt.HInteger;
+import io.hevo.connector.model.field.data.datum.hudt.HJson;
+import io.hevo.connector.model.field.data.datum.hudt.HLong;
+import io.hevo.connector.model.field.data.datum.hudt.HShort;
+import io.hevo.connector.model.field.data.datum.hudt.HStruct;
+import io.hevo.connector.model.field.data.datum.hudt.HTime;
+import io.hevo.connector.model.field.data.datum.hudt.HTimeTZ;
+import io.hevo.connector.model.field.data.datum.hudt.HUnsupported;
+import io.hevo.connector.model.field.data.datum.hudt.HVarchar;
 import io.hevo.connector.model.field.schema.base.Field;
+import io.hevo.connector.model.field.schema.enumeration.FieldState;
+import io.hevo.connector.model.field.schema.hudt.HDataType;
+import io.hevo.connector.model.field.schema.hudt.HDateTimeField;
+import io.hevo.connector.model.field.schema.hudt.HIntegerField;
 import io.hevo.connector.offset.Offset;
-import io.hevo.connector.ui.Auth;
-import io.hevo.connector.ui.OptionsRef;
-import io.hevo.connector.ui.OptionsRefType;
-import io.hevo.connector.ui.Property;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import io.hevo.connector.processor.ConnectorProcessor;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Time;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.Properties;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,127 +58,16 @@ import org.slf4j.LoggerFactory;
  *   <li>Check unsupported fields in Bulk v2 - To be added post testing
  * </ol>
  */
-public class TestConnector extends JdbcConnector {
+public class TestConnector implements GenericConnector {
 
   private static final Logger log = LoggerFactory.getLogger(TestConnector.class);
 
   private static final String CURSOR_FIELD = "SystemModstamp";
 
-  @Property(
-      name = "account_type",
-      displayName = "Account Type",
-      defaultValue = "PRODUCTION",
-      fieldOrder = 2,
-      optionsRef =
-          @OptionsRef(
-              type = OptionsRefType.STATIC,
-              allowedValues = {"PRODUCTION", "SANDBOX"}))
-  private AccountType accountType;
-
-  @Auth(name = "auth_type", displayName = "Auth Type", type = AuthType.OAUTH, fieldOrder = 1)
-  private AuthCredentials authCredentials;
-
   @Override
   public void initializeConnection() throws ConnectorException {
-    String jdbcUrlProtocol = "jdbc:salesforce:";
-
-    Properties properties = new Properties();
-
-    if (null != authCredentials && AuthType.OAUTH.equals(authCredentials.getAuthType())) {
-      properties.setProperty("AuthScheme", "OAuth");
-      properties.setProperty("OAuthClientId", authCredentials.getClientId());
-      properties.setProperty("OAuthClientSecret", authCredentials.getClientSecret());
-      properties.setProperty("OAuthRefreshToken", authCredentials.getRefreshToken());
-      properties.setProperty("InitiateOAuth", "REFRESH");
-    }
-
-    properties.setProperty(
-        "UseSandbox", AccountType.SANDBOX.equals(accountType) ? "true" : "false");
-    properties.setProperty("UseBulkAPI", "true");
-    properties.setProperty("BulkAPIVersion", "v2");
-    properties.setProperty("ConnectOnOpen", "true");
-    properties.setProperty("AutoCache", "false");
-    StringBuilder otherProperties = new StringBuilder();
-    otherProperties.append("OEMKey=").append(getDriverKey()).append(";");
-    properties.setProperty("Other", otherProperties.toString());
-    // Mandatory Base Properties
-    properties.setProperty("LogFile", getLogFilePath());
-    properties.setProperty("Verbosity", getLogVerbosity());
-
-    try {
-      this.connection = DriverManager.getConnection(jdbcUrlProtocol, properties);
-      databaseConnectionSource = new DbConnectionSource(connection);
-    } catch (SQLException e) {
-      log.error("Initialize connection failed");
-      throw new ConnectorException(e);
-    }
+    log.info("Initialized connection");
   }
-
-  private static final Set<String> BULK_MODE_UNSUPPORTED_TABLES =
-      Set.of(
-          "AcceptedEventRelation",
-          "AppTabMember",
-          "ColorDefinition",
-          "EntityDefinition",
-          "SiteDetail",
-          "KnowledgeArticleVersionHistory",
-          "RelationshipInfo",
-          "DeclinedEventRelation",
-          "KnowledgeArticleVersion",
-          "ContentFolderItem",
-          "OutgoingEmailRelation",
-          "TopicAssignment",
-          "TaskStatus",
-          "DataType",
-          "Announcement",
-          "DatacloudAddress",
-          "IconDefinition",
-          "FieldSecurityClassification",
-          "ListViewChartInstance",
-          "ContentDocumentLink",
-          "BackgroundOperationResult",
-          "PicklistValueInfo",
-          "EntitySubscription",
-          "PartnerRole",
-          "BotEventLog",
-          "DataAssetSemanticGraphEdge",
-          "NetworkUserHistoryRecent",
-          "DatacloudDandBCompany",
-          "ListViewChartInstances",
-          "OwnerChangeOptionInfo",
-          "RecentlyViewed",
-          "FlexQueueItem",
-          "KnowledgeArticle",
-          "FlowVersionView",
-          "ApexPageInfo",
-          "RelationshipDomain",
-          "TaskPriority",
-          "FlowVariableView",
-          "SolutionStatus",
-          "FieldChangeSnapshot",
-          "FieldDefinition",
-          "ContractStatus",
-          "TaskWhoRelation",
-          "PlatformAction",
-          "EventWhoRelation",
-          "SearchLayout",
-          "FeedRevision",
-          "EntityParticle",
-          "FeedComment",
-          "RecentFieldChange",
-          "AccountUserTerritory2View",
-          "ContentFolderMember",
-          "DataStatistics",
-          "FeedItem",
-          "KnowledgeArticleVoteStat",
-          "CaseStatus",
-          "AuraDefinitionInfo",
-          "OutgoingEmail",
-          "DataAssetUsageTrackingInfo",
-          "FeedAttachment",
-          "OrderStatus",
-          "IdeaComment",
-          "KnowledgeArticleViewStat");
 
   /**
    * Retrieves a list of object details matching the specified criteria.
@@ -167,27 +78,22 @@ public class TestConnector extends JdbcConnector {
    */
   @Override
   public List<ObjectDetails> getObjects() throws ConnectorException {
-    List<ObjectDetails> objectDetails = super.getObjects();
+    ObjectDetails o1 =
+        ObjectDetails.builder()
+            .table("o1")
+            .type("TABLE")
+            .delimiter(".")
+            .sourceObjectStatus(SourceObjectStatus.ACTIVE)
+            .build();
+    ObjectDetails o2 =
+        ObjectDetails.builder()
+            .table("o2")
+            .type("TABLE")
+            .delimiter(".")
+            .sourceObjectStatus(SourceObjectStatus.ACTIVE)
+            .build();
 
-    List<ObjectDetails> result = new ArrayList<>();
-    for (ObjectDetails obj : objectDetails) {
-      if (BULK_MODE_UNSUPPORTED_TABLES.contains(obj.getTableName())) {
-        ObjectDetails details =
-            ObjectDetails.builder()
-                .catalog(obj.getCatalogName())
-                .schema(obj.getSchemaName())
-                .table(obj.getTableName())
-                .type(obj.getType())
-                .delimiter(obj.getDelimiter())
-                .sourceObjectStatus(SourceObjectStatus.INACCESSIBLE)
-                .blockReason("Unsupported in bulk mode.")
-                .build();
-        result.add(details);
-        continue;
-      }
-      result.add(obj);
-    }
-    return result;
+    return Arrays.asList(o1, o2);
   }
 
   /**
@@ -201,96 +107,116 @@ public class TestConnector extends JdbcConnector {
   @Override
   public List<ObjectSchema> fetchSchemaFromSource(List<ObjectDetails> objectDetails)
       throws ConnectorException {
-    List<ObjectSchema> objectData = super.fetchSchemaFromSource(objectDetails);
-    List<ObjectSchema> result = new ArrayList<>(objectData.size());
-    for (ObjectSchema objectSchema : objectData) {
-      ObjectDetails objectDetail = objectSchema.objectDetail();
-      if (BULK_MODE_UNSUPPORTED_TABLES.contains(objectDetail.getTableName())) {
-        ObjectDetails details =
-            ObjectDetails.builder()
-                .catalog(objectDetail.getCatalogName())
-                .schema(objectDetail.getSchemaName())
-                .table(objectDetail.getTableName())
-                .type(objectDetail.getType())
-                .delimiter(objectDetail.getDelimiter())
-                .sourceObjectStatus(SourceObjectStatus.INACCESSIBLE)
-                .blockReason("Unsupported in bulk mode.")
-                .build();
-        result.add(new ObjectSchema(details, objectSchema.fields()));
-        continue;
+    Set<Field> fields1 = new HashSet<>();
+    HIntegerField.Builder id1 =
+        new HIntegerField.Builder("id", "INTEGER", 1, FieldState.ACTIVE).isNullable(false);
+    id1.pkPos(1);
+    HDateTimeField.Builder ts1 =
+        new HDateTimeField.Builder("updated_ts", "TIMESTAMP", 2, FieldState.ACTIVE, 9)
+            .isNullable(false);
+    ts1.ckOrdinal(2);
+    fields1.add(id1.build());
+    fields1.add(ts1.build());
+
+    Set<Field> fields2 = new HashSet<>();
+    HIntegerField.Builder id2 =
+        new HIntegerField.Builder("id", "INTEGER", 1, FieldState.ACTIVE).isNullable(false);
+    id2.pkPos(1);
+    HDateTimeField.Builder ts2 =
+        new HDateTimeField.Builder("updated_ts", "TIMESTAMP", 2, FieldState.ACTIVE, 9)
+            .isNullable(false);
+    ts2.ckOrdinal(2);
+    fields2.add(id2.build());
+    fields2.add(ts2.build());
+
+    ObjectSchema os1 = new ObjectSchema(objectDetails.get(0), fields1);
+    ObjectSchema os2 = new ObjectSchema(objectDetails.get(1), fields2);
+    return Arrays.asList(os1, os2);
+  }
+
+  @Override
+  public ExecutionResult fetchDataFromSource(
+      ConnectorContext connectorContext, ConnectorProcessor connectorProcessor)
+      throws ConnectorException {
+    List<HDatum> row = new ArrayList<>(connectorContext.schema().fields().size());
+
+    Offset.Builder currentRecordOffset = Offset.builder();
+
+    for (Field col : connectorContext.schema().fields()) {
+      HDataType hDataType = HDataType.fromLogicalType(col.logicalType());
+      if (hDataType.equals(HDataType.INTEGER)) {
+        row.add(new HInteger(1));
+      } else if (hDataType.equals(HDataType.DATE_TIME)) {
+        row.add(new HDateTime(LocalDateTime.now()));
       }
-      result.add(objectSchema);
     }
-    return result;
+    connectorProcessor.publish(
+        new HStruct(row), ConnectorMeta.builder().opType(OpType.READ).build());
+    return new ExecutionResult(1, currentRecordOffset.build());
   }
 
-  /**
-   * Retrieves the names of cursor fields for the specified object details. For salesforce it is
-   * same for all if applicable.
-   *
-   * @param objectDetails The details of the object for which cursor field names are retrieved.
-   * @return A set containing the names of the cursor fields.
-   */
-  @Override
-  protected Set<String> getCursorFieldNames(ObjectDetails objectDetails) {
-    return Set.of(CURSOR_FIELD);
+  @SuppressWarnings("java:S3776")
+  private HDatum createHDatum(HDataType hDataType, Object colVal) {
+    switch (hDataType) {
+      case BOOLEAN -> {
+        return new HBoolean(Objects.isNull(colVal) ? null : (Boolean) colVal);
+      }
+      case BYTE -> {
+        return new HByte(Objects.isNull(colVal) ? null : (Byte) colVal);
+      }
+      case DATE -> {
+        return new HDate(Objects.isNull(colVal) ? null : ((Date) colVal).toLocalDate());
+      }
+      case DECIMAL -> {
+        return new HDecimal(Objects.isNull(colVal) ? null : (BigDecimal) colVal);
+      }
+      case DOUBLE -> {
+        return new HDouble(Objects.isNull(colVal) ? null : (Double) colVal);
+      }
+      case FLOAT -> {
+        return new HFloat(Objects.isNull(colVal) ? null : (Float) colVal);
+      }
+      case INTEGER -> {
+        return new HInteger(Objects.isNull(colVal) ? null : (Integer) colVal);
+      }
+      case JSON -> {
+        return new HJson(Objects.isNull(colVal) ? null : (String) colVal);
+      }
+      case LONG -> {
+        return new HLong(Objects.isNull(colVal) ? null : (Long) colVal);
+      }
+      case SHORT -> {
+        return new HShort(Objects.isNull(colVal) ? null : (Short) colVal);
+      }
+      case TIME -> {
+        return new HTime(Objects.isNull(colVal) ? null : ((Time) colVal).toLocalTime());
+      }
+        // -ve value check
+      case TIME_TZ -> {
+        return new HTimeTZ(
+            Objects.isNull(colVal)
+                ? null
+                : OffsetTime.of(((Time) colVal).toLocalTime(), ZoneOffset.UTC));
+      }
+      case DATE_TIME -> {
+        return new HDateTime(Objects.isNull(colVal) ? null : LocalDateTime.now());
+      }
+      case DATE_TIME_TZ -> {
+        return new HDateTimeTZ(
+            Objects.isNull(colVal) ? null : OffsetDateTime.parse((String) colVal));
+      }
+      case VARCHAR -> {
+        return new HVarchar(Objects.isNull(colVal) ? null : (String) colVal);
+      }
+      default -> {
+        log.debug("Unsupported field type {}", hDataType);
+        return new HUnsupported();
+      }
+    }
   }
 
-  /**
-   * Compares the previous and current offsets based on the provided cursor fields and returns the
-   * latest offset.
-   *
-   * @param previousOffset The previous offset to compare.
-   * @param currentOffset The current offset to compare.
-   * @param selectedFields The list of selected fields.
-   * @return The latest offset between the previous and current offsets.
-   */
   @Override
-  protected Offset compareAndGetLatestOffset(
-      ObjectDetails objectDetail,
-      Offset previousOffset,
-      Offset currentOffset,
-      List<Field> selectedFields) {
-    Optional<Field> cursorFieldOpt =
-        selectedFields.stream().filter(f -> f.properties().isCK()).findAny();
-    // Salesforce contains only 1 cursor field
-    if (cursorFieldOpt.isEmpty()) {
-      return currentOffset;
-    }
-
-    LocalDateTime previousOffsetDateValue =
-        Optional.ofNullable(previousOffset)
-            .map(Offset::getOffset)
-            .map(m -> m.get(cursorFieldOpt.get()))
-            .flatMap(HDatum::asDateTime)
-            .orElse(null);
-    LocalDateTime currentOffsetDateValue =
-        Optional.ofNullable(currentOffset)
-            .map(Offset::getOffset)
-            .map(m -> m.get(cursorFieldOpt.get()))
-            .flatMap(HDatum::asDateTime)
-            .orElse(null);
-
-    if (previousOffsetDateValue == null) {
-      return currentOffset;
-    }
-
-    if (currentOffsetDateValue == null) {
-      return previousOffset;
-    }
-
-    return (currentOffsetDateValue.isAfter(previousOffsetDateValue))
-        ? currentOffset
-        : previousOffset;
-  }
-
-  @Override
-  public void handleExceptions(String errorMessage, Exception e) throws ConnectorException {
-    log.error(errorMessage);
-    if (null != e.getMessage() && e.getMessage().contains("REQUEST_LIMIT_EXCEEDED")) {
-      throw new RateLimitException(
-          "Encountered rate limit exception. It will be retried in the next schedule. If it still fails, please increase the rate limit at the source.");
-    }
-    throw new ConnectorException(errorMessage, e);
+  public void close() throws ConnectorException {
+    // Clean resources
   }
 }

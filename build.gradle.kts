@@ -77,6 +77,7 @@ dependencies {
     implementation("io.hevo:hevo-sdk:1.0.0-SNAPSHOT")
     implementation("io.hevo:jdbc-connector:1.0.0-SNAPSHOT")
 
+    implementation("com.fasterxml.jackson.core:jackson-databind")
     // Test Dependencies
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
