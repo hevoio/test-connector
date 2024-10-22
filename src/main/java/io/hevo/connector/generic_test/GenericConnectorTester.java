@@ -13,6 +13,8 @@ import io.hevo.connector.model.ObjectDetails;
 import io.hevo.connector.model.ObjectSchema;
 import io.hevo.connector.offset.Offset;
 import io.hevo.connector.test_connector.TestConnector;
+import io.hevo.connector.ui.Auth;
+import io.hevo.connector.ui.Property;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -69,9 +71,51 @@ public class GenericConnectorTester<T extends GenericConnector> {
   public void loadConfigurationFromFile(String filePath) throws ConnectorException {
     try {
       Map<String, Object> config = objectMapper.readValue(new File(filePath), Map.class);
-      setFields(config);
+      setAnnotatedFields(config);
     } catch (IOException e) {
       throw new ConnectorException("Failed to read configuration file.", e);
+    }
+  }
+
+  private List<Field> getAllAnnotatedFields(Class<?> clazz) {
+    List<Field> annotatedFields = new ArrayList<>();
+    Class<?> currentClass = clazz;
+    while (currentClass != null) {
+      for (Field field : currentClass.getDeclaredFields()) {
+        if (field.isAnnotationPresent(Property.class) || field.isAnnotationPresent(Auth.class)) {
+          // Skip static or final fields
+          if (Modifier.isStatic(field.getModifiers()) || Modifier.isFinal(field.getModifiers())) {
+            continue;
+          }
+          annotatedFields.add(field);
+        }
+      }
+      currentClass = currentClass.getSuperclass();
+    }
+    return annotatedFields;
+  }
+
+  /**
+   * Sets the annotated fields of the connector instance based on the provided configuration map.
+   *
+   * @param config A map containing field names and their corresponding values.
+   * @throws ConnectorException If setting fields fails.
+   */
+  private void setAnnotatedFields(Map<String, Object> config) throws ConnectorException {
+    List<Field> fields = getAllAnnotatedFields(connectorClass);
+    for (Field field : fields) {
+      String fieldName = field.getName();
+      if (!config.containsKey(fieldName)) {
+        throw new ConnectorException("Missing configuration for field: " + fieldName);
+      }
+      Object value = config.get(fieldName);
+      try {
+        field.setAccessible(true);
+        Object parsedValue = parseValue(value, field.getType(), true);
+        field.set(connectorInstance, parsedValue);
+      } catch (IllegalAccessException e) {
+        throw new ConnectorException("Failed to set field '" + fieldName + "'.", e);
+      }
     }
   }
 
@@ -82,7 +126,8 @@ public class GenericConnectorTester<T extends GenericConnector> {
    */
   public void promptForConfiguration() throws ConnectorException {
     Scanner scanner = new Scanner(System.in);
-    List<Field> fields = getAllFields(connectorClass);
+    List<Field> fields = getAllAnnotatedFields(connectorClass);
+    Map<String, Object> configMap = new HashMap<>();
 
     for (Field field : fields) {
       // Skip static or final fields
@@ -99,22 +144,9 @@ public class GenericConnectorTester<T extends GenericConnector> {
       String input = scanner.nextLine();
 
       Object value = parseValue(input, fieldType, false);
-      try {
-        field.set(connectorInstance, value);
-      } catch (IllegalAccessException e) {
-        throw new ConnectorException("Failed to set field '" + fieldName + "'.", e);
-      }
+      configMap.put(fieldName, value);
+      setAnnotatedFields(configMap);
     }
-  }
-
-  private List<Field> getAllFields(Class<?> clazz) {
-    List<Field> fields = new ArrayList<>();
-    Class<?> currentClass = clazz;
-    while (currentClass != null) {
-      fields.addAll(Arrays.asList(currentClass.getDeclaredFields()));
-      currentClass = currentClass.getSuperclass();
-    }
-    return fields;
   }
 
   /**
@@ -249,48 +281,6 @@ public class GenericConnectorTester<T extends GenericConnector> {
         System.err.println("Failed to close the connection" + e.getMessage());
       }
     }
-  }
-
-  /**
-   * Sets the fields of the connector instance based on the provided configuration map.
-   *
-   * @param config A map containing field names and their corresponding values.
-   * @throws ConnectorException If setting fields fails.
-   */
-  private void setFields(Map<String, Object> config) throws ConnectorException {
-    for (Map.Entry<String, Object> entry : config.entrySet()) {
-      String fieldName = entry.getKey();
-      Object value = entry.getValue();
-      try {
-        Field field = getFieldIncludingSuperclasses(connectorClass, fieldName);
-        field.setAccessible(true);
-        Object parsedValue = parseValue(value, field.getType(), true);
-        field.set(connectorInstance, parsedValue);
-      } catch (NoSuchFieldException e) {
-        System.out.println(
-            "Warning: Field '"
-                + fieldName
-                + "' does not exist in connector class or its superclasses.");
-      } catch (IllegalAccessException e) {
-        throw new ConnectorException("Failed to set field '" + fieldName + "'.", e);
-      }
-    }
-  }
-
-  private Field getFieldIncludingSuperclasses(Class<?> clazz, String fieldName)
-      throws NoSuchFieldException {
-    Class<?> currentClass = clazz;
-    while (currentClass != null) {
-      try {
-        Field field = currentClass.getDeclaredField(fieldName);
-        return field;
-      } catch (NoSuchFieldException e) {
-        // Field not found in current class, continue to superclass
-        currentClass = currentClass.getSuperclass();
-      }
-    }
-    // Field not found in any superclass
-    throw new NoSuchFieldException("Field '" + fieldName + "' not found in class hierarchy.");
   }
 
   /**
