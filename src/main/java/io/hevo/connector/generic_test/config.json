@@ -2,8 +2,8 @@
   "accountType": "PRODUCTION",
   "authCredentials": {
     "authType": "OAUTH",
-    "clientId": "3MVG9NnK0U_HimV58kS1maPwjG5yPqiZ3kD50U9du3o05W3HnfvQAWoGDFCTv.62i8GC5DenUDMJzFolh6kQ6",
-    "clientSecret": "150B6D4F7FA29269CDF51AA006EBC5841CCCD2ECAD868F9EEBC89FE83A7DE706",
-    "refreshToken": "5Aep861ZToW_TPW2I9IVwhtv4Df08gZRDO75gt_Y.YNBbf.ve8ZrayV9Z7HhJ.cOCjKhffFT75kSaDCOVAEgENn"
+    "clientId": "***",
+    "clientSecret": "***",
+    "refreshToken": "***"
   }
 }
