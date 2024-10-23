@@ -1,0 +1,9 @@
+{
+  "accountType": "PRODUCTION",
+  "authCredentials": {
+    "authType": "OAUTH",
+    "clientId": "***",
+    "clientSecret": "***",
+    "refreshToken": "***"
+  }
+}
