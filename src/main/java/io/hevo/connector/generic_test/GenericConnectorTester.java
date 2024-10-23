@@ -11,11 +11,15 @@ import io.hevo.connector.model.ConnectorContext;
 import io.hevo.connector.model.ExecutionResult;
 import io.hevo.connector.model.ObjectDetails;
 import io.hevo.connector.model.ObjectSchema;
+import io.hevo.connector.model.field.schema.base.FieldProperties;
+import io.hevo.connector.model.field.schema.hudt.HField;
 import io.hevo.connector.offset.Offset;
 import io.hevo.connector.test_connector.TestConnector;
 import io.hevo.connector.ui.Auth;
 import io.hevo.connector.ui.Property;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -26,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -216,6 +221,9 @@ public class GenericConnectorTester<T extends GenericConnector> {
       System.out.println("Fetching object schemas...");
       List<ObjectSchema> objectSchemas = connectorInstance.fetchSchemaFromSource(objectsToPoll);
 
+      String schemaCSV = "src/main/java/io/hevo/connector/generic_test/output/object_schemas.csv";
+      exportObjectSchemasToCsv(objectSchemas, schemaCSV);
+
       Map<ObjectSchema, ExecutionResult> objectFetchResult = new HashMap<>();
       // Historical Data Fetching
       System.out.println("Starting historical data fetching...");
@@ -280,6 +288,87 @@ public class GenericConnectorTester<T extends GenericConnector> {
       } catch (ConnectorException e) {
         System.err.println("Failed to close the connection" + e.getMessage());
       }
+    }
+  }
+
+  private void exportObjectSchemasToCsv(List<ObjectSchema> objectSchemas, String filePath) {
+    // Define the CSV header
+    String header =
+        "fullyQualifiedName,sourceFieldName,sourceDataType,logicalType,"
+            + "position,defaultValue,pkPos,customPkPos,ckOrdinal,"
+            + "isNullable,isToasted,isInternal,fieldProvider,"
+            + "shouldReplicateToDestination,length,precision,scale";
+
+    // Ensure the output directory exists
+    File file = new File(filePath);
+    File parentDir = file.getParentFile();
+    if (parentDir != null && !parentDir.exists()) {
+      if (parentDir.mkdirs()) {
+        System.out.println("Created output directory: " + parentDir.getAbsolutePath());
+      } else {
+        System.err.println("Failed to create output directory: " + parentDir.getAbsolutePath());
+        return;
+      }
+    }
+
+    try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+      // Write header
+      writer.write(header);
+      writer.newLine();
+
+      // Iterate through each ObjectSchema
+      for (ObjectSchema objectSchema : objectSchemas) {
+        String fullyQualifiedName = objectSchema.objectDetail().getTableFullyQualifiedName();
+        Set<io.hevo.connector.model.field.schema.base.Field> fields = objectSchema.fields();
+
+        for (io.hevo.connector.model.field.schema.base.Field field : fields) {
+          String sourceFieldName = "";
+          String sourceDataType = "";
+
+          // Check if the field is an instance of HField to get source-specific data
+          if (field instanceof HField) {
+            HField hField = (HField) field;
+            sourceFieldName = hField.sourceFieldName();
+            sourceDataType = hField.sourceDataType();
+          }
+
+          String logicalType = field.logicalType();
+          FieldProperties properties = field.properties();
+
+          // Prepare the row data
+          StringBuilder row = new StringBuilder();
+          row.append(fullyQualifiedName).append(",");
+          row.append(sourceFieldName).append(",");
+          row.append(sourceDataType).append(",");
+          row.append(logicalType).append(",");
+          row.append(properties.position()).append(",");
+          row.append(properties.defaultValue().orElse("")).append(",");
+          row.append(properties.pkPos().isPresent() ? properties.pkPos().get() : "").append(",");
+          row.append(properties.customPkPos().isPresent() ? properties.customPkPos().get() : "")
+              .append(",");
+          row.append(properties.ckOrdinal().isPresent() ? properties.ckOrdinal().get() : "")
+              .append(",");
+          row.append(properties.isNullable()).append(",");
+          row.append(properties.isToasted()).append(",");
+          row.append(properties.isInternal()).append(",");
+          row.append(
+                  properties.fieldProvider() != null ? properties.fieldProvider().toString() : "")
+              .append(",");
+          row.append(properties.shouldReplicateToDestination()).append(",");
+          row.append(properties.length().isPresent() ? properties.length().get() : "").append(",");
+          row.append(properties.precision().isPresent() ? properties.precision().get() : "")
+              .append(",");
+          row.append(properties.scale().isPresent() ? properties.scale().get() : "");
+
+          // Write the row to CSV
+          writer.write(row.toString());
+          writer.newLine();
+        }
+      }
+      System.out.println("CSV file created successfully at: " + filePath);
+    } catch (IOException e) {
+      e.printStackTrace();
+      System.err.println("Error while writing CSV file.");
     }
   }
 
