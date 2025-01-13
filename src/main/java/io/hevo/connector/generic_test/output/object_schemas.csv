@@ -1,0 +1,5 @@
+fullyQualifiedName,sourceFieldName,sourceDataType,logicalType,position,defaultValue,pkPos,customPkPos,ckOrdinal,isNullable,isToasted,isInternal,fieldProvider,shouldReplicateToDestination,length,precision,scale
+o1,updated_ts,TIMESTAMP,hudt_date_time,2,,,,2,false,false,false,SOURCE,true,,9,
+o1,id,INTEGER,hudt_integer,1,,1,,,false,false,false,SOURCE,true,,,
+o2,updated_ts,TIMESTAMP,hudt_date_time,2,,,,2,false,false,false,SOURCE,true,,9,
+o2,id,INTEGER,hudt_integer,1,,1,,,false,false,false,SOURCE,true,,,
