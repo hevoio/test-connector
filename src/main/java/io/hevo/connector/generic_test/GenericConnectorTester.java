@@ -488,22 +488,8 @@ public class GenericConnectorTester<T extends GenericConnector> {
       // Replace SalesforceConnector.class with your actual connector class
       GenericConnectorTester<?> tester = new GenericConnectorTester<>(TestConnector.class);
 
-      Scanner scanner = new Scanner(System.in);
-      System.out.println("Choose configuration method:");
-      System.out.println("1. Load from properties file");
-      System.out.println("2. Enter manually via prompts");
-      System.out.println("Enter choice (1 or 2): ");
-      String choice = scanner.nextLine();
-
-      if ("1".equals(choice)) {
-        String filePath = "src/main/java/io/hevo/connector/generic_test/config.json";
-        tester.loadConfigurationFromFile(filePath);
-      } else if ("2".equals(choice)) {
-        tester.promptForConfiguration();
-      } else {
-        System.err.println("Invalid choice. Exiting.");
-        return;
-      }
+      String filePath = "src/main/java/io/hevo/connector/generic_test/config.json";
+      tester.loadConfigurationFromFile(filePath);
       tester.executeConnector();
 
     } catch (ConnectorException e) {
