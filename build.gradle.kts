@@ -74,9 +74,9 @@ dependencies {
     }
 
 //    implementation(files("$projectDir/libs/*.jar"))
-    implementation("io.hevo:hevo-sdk:1.0.0-SNAPSHOT")
-    implementation("io.hevo:jdbc-connector:1.0.0-SNAPSHOT") {
-        exclude(group = "io.hevo", module = "hevo-sdk")
+    implementation("io.hevo:hevo-sdk:1.4.0-SNAPSHOT")
+    implementation("io.hevo:jdbc-connector:1.3.0") {
+        exclude("io.hevo", module = "hevo-sdk")
     }
 
     implementation("com.fasterxml.jackson.core:jackson-databind")
