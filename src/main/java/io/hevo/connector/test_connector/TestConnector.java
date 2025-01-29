@@ -80,14 +80,14 @@ public class TestConnector implements GenericConnector {
     HDateTimeField.Builder ts1 =
         new HDateTimeField.Builder("updated_ts", "TIMESTAMP", 2, FieldState.ACTIVE, 9)
             .isNullable(false);
-    ts1.ckOrdinal(2);
+    ts1.ckOrdinal(1);
     fields1.add(id1.build());
     fields1.add(ts1.build());
 
     Set<Field> fields2 = new HashSet<>();
     HIntegerField.Builder id2 =
         new HIntegerField.Builder("id", "INTEGER", 1, FieldState.ACTIVE).isNullable(false);
-    id2.pkPos(1);
+    //    id2.pkPos(2);
     HDateTimeField.Builder ts2 =
         new HDateTimeField.Builder("updated_ts", "TIMESTAMP", 2, FieldState.ACTIVE, 9)
             .isNullable(false);
